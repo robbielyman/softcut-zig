@@ -1,0 +1,16 @@
+.{
+    .name = "libsoundio",
+    .version = "2.0.0",
+    .paths = .{
+        "build.zig.zon",
+        "build.zig",
+        "main.zig",
+        "c.zig",
+    },
+    .dependencies = .{
+        .upstream = .{
+            .url = "https://github.com/andrewrk/libsoundio/archive/49a1f78b50eb0f5a49d096786a95a93874a2592a.tar.gz",
+            .hash = "122042c15231c95171c6875a67035ee862141ff03fbc0d7eabcd9b2554b10d7ed8bd",
+        },
+    },
+}

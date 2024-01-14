@@ -1,0 +1,20 @@
+.{
+    .name = "softcut-zig",
+    .version = "0.0.0",
+    .minimum_zig_version = "0.12.0-dev.2154+e5dc9b1d0",
+    .dependencies = .{
+        .upstream = .{
+            .url = "https://github.com/monome/softcut-lib/archive/ce870c55fae1b58fd357ca639bbfe0754c0760e4.tar.gz",
+            .hash = "1220e4c7c790eb6f9a9bffe46f6cf591906393d0a94f19a94a3161be784327edd79f",
+        },
+        .liblo = .{ .path = "lib/liblo" },
+        .libsoundio = .{ .path = "lib/libsoundio" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+        "README.md",
+        "src",
+    },
+}

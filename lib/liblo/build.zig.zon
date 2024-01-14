@@ -1,0 +1,16 @@
+.{
+    .name = "liblo",
+    .version = "0.31.0",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "main.zig",
+        "c.zig",
+    },
+    .dependencies = .{
+        .upstream = .{
+            .url = "https://github.com/radarsat1/liblo/archive/9efdb8e0a40cb8929675b9b1825337cfd30f9e82.tar.gz",
+            .hash = "1220b73e3e662cc956e95188ef578abec5683a974cbecb00e83a67a3723a3acdd4bc",
+        },
+    },
+}
