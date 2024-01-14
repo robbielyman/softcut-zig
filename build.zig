@@ -11,8 +11,16 @@ pub fn build(b: *std.Build) !void {
 
     // dependencies
 
-    const liblo = b.dependency("liblo", .{ .static = static });
-    const libsoundio = b.dependency("libsoundio", .{ .static = static });
+    const liblo = b.dependency("liblo", .{
+        .target = target,
+        .optimize = optimize,
+        .static = static,
+    });
+    const libsoundio = b.dependency("libsoundio", .{
+        .target = target,
+        .optimize = optimize,
+        .static = static,
+    });
 
     // softcut
 
@@ -28,6 +36,8 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+
+    b.installArtifact(lib);
 
     const upstream = b.dependency("upstream", .{});
 
