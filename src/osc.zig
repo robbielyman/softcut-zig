@@ -122,26 +122,12 @@ pub fn addServerMethods(this: *This) void {
     this.addServerMethod("/set/param/cut/buffer", "ii", Methods.setBuffer);
 
     // nrt
-
-    this.addServerMethod("/softcut/buffer/read_mono", "s", Methods.readMono);
-    this.addServerMethod("/softcut/buffer/read_mono", "sf", Methods.readMono);
-    this.addServerMethod("/softcut/buffer/read_mono", "sff", Methods.readMono);
-    this.addServerMethod("/softcut/buffer/read_mono", "sfff", Methods.readMono);
-    this.addServerMethod("/softcut/buffer/read_mono", "sfffi", Methods.readMono);
     this.addServerMethod("/softcut/buffer/read_mono", "sfffii", Methods.readMono);
 
-    this.addServerMethod("/softcut/buffer/read_stereo", "s", Methods.readStereo);
-    this.addServerMethod("/softcut/buffer/read_stereo", "sf", Methods.readStereo);
-    this.addServerMethod("/softcut/buffer/read_stereo", "sff", Methods.readStereo);
     this.addServerMethod("/softcut/buffer/read_stereo", "sfff", Methods.readStereo);
 
-    this.addServerMethod("/softcut/buffer/write_mono", "s", Methods.writeMono);
-    this.addServerMethod("/softcut/buffer/write_mono", "sf", Methods.writeMono);
-    this.addServerMethod("/softcut/buffer/write_mono", "sff", Methods.writeMono);
     this.addServerMethod("/softcut/buffer/write_mono", "sffi", Methods.writeMono);
 
-    this.addServerMethod("/softcut/buffer/write_stereo", "s", Methods.writeStereo);
-    this.addServerMethod("/softcut/buffer/write_stereo", "sf", Methods.writeStereo);
     this.addServerMethod("/softcut/buffer/write_stereo", "sff", Methods.writeStereo);
 
     // clear
