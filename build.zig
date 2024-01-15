@@ -97,6 +97,7 @@ pub fn build(b: *std.Build) !void {
     b.installArtifact(exe);
 
     const run = b.addRunArtifact(exe);
+    run.addArgs(b.args orelse &.{});
     run.step.dependOn(b.getInstallStep());
     const run_step = b.step("run", "run softcut-client");
     run_step.dependOn(&run.step);
