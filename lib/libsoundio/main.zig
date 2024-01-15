@@ -3,34 +3,35 @@
 pub const c = @import("c.zig");
 const std = @import("std");
 
-pub const Format = enum(c_int) {
+pub const S16NE: Format = if (c.SoundIoFormatS16NE == c.SoundIoFormatS16LE) .S16LE else .S16BE;
+pub const U16NE: Format = if (c.SoundIoFormatU16NE == c.SoundIoFormatU16LE) .U16LE else .U16BE;
+pub const S24NE: Format = if (c.SoundIoFormatS24NE == c.SoundIoFormatS24LE) .S24LE else .S24BE;
+pub const U24NE: Format = if (c.SoundIoFormatU24NE == c.SoundIoFormatU24LE) .U24LE else .U24BE;
+pub const S32NE: Format = if (c.SoundIoFormatS32NE == c.SoundIoFormatS32LE) .S32LE else .S32BE;
+pub const U32NE: Format = if (c.SoundIoFormatU32NE == c.SoundIoFormatU32LE) .U32LE else .U32BE;
+pub const Float32NE: Format = if (c.SoundIoFormatFloat32NE == c.SoundIoFormatFloat32LE) .Float32LE else .Float32BE;
+pub const Float64NE: Format = if (c.SoundIoFormatFloat64NE == c.SoundIoFormatFloat64LE) .Float64LE else .Float64BE;
+
+pub const Format = enum(c_uint) {
     Invalid = c.SoundIoFormatInvalid,
     S8 = c.SoundIoFormatS8,
     U8 = c.SoundIoFormatU8,
     S16LE = c.SoundIoFormatS16LE,
     S16BE = c.SoundIoFormatS16BE,
-    S16NE = c.SoundIoFormatS16NE,
     U16LE = c.SoundIoFormatU16LE,
     U16BE = c.SoundIoFormatU16BE,
-    U16NE = c.SoundIoFormatU16NE,
     S24LE = c.SoundIoFormatS24LE,
     S24BE = c.SoundIoFormatS24BE,
-    S24NE = c.SoundIoFormatS24NE,
     U24LE = c.SoundIoFormatU24LE,
     U24BE = c.SoundIoFormatU24BE,
-    U24NE = c.SoundIoFormatU24NE,
     S32LE = c.SoundIoFormatS32LE,
     S32BE = c.SoundIoFormatS32BE,
-    S32NE = c.SoundIoFormatS32NE,
     U32LE = c.SoundIoFormatU32LE,
     U32BE = c.SoundIoFormatU32BE,
-    U32NE = c.SoundIoFormatU32NE,
     Float32LE = c.SoundIoFormatFloat32LE,
     Float32BE = c.SoundIoFormatFloat32BE,
-    Float32NE = c.SoundIoFormatFloat32NE,
     Float64LE = c.SoundIoFormatFloat64LE,
     Float64BE = c.SoundIoFormatFloat64BE,
-    Float64NE = c.SoundIoFormatFloat64NE,
 };
 
 pub const LayoutId = enum(c_int) {
@@ -58,7 +59,7 @@ pub const LayoutId = enum(c_int) {
     Id7Point0Front = c.SoundIoChannelLayoutId7Point0Front,
     Id7Point1 = c.SoundIoChannelLayoutId7Point1,
     Id7Point1Wide = c.SoundIoChannelLayoutId7Point1Wide,
-    Id7Point1Back = c.SoundIoChannelLayoutId7Point1Back,
+    Id7Point1WideBack = c.SoundIoChannelLayoutId7Point1WideBack,
     IdOctagonal = c.SoundIoChannelLayoutIdOctagonal,
 };
 
@@ -175,7 +176,7 @@ pub fn unwrap(err: c_int) Err!void {
     };
 }
 
-const SoundIo = struct {
+pub const SoundIo = struct {
     handle: *c.SoundIo,
 
     pub fn create() Err!SoundIo {
@@ -271,6 +272,11 @@ pub const Device = struct {
         c.soundio_device_unref(self.handle);
     }
 
+    pub fn name(self: Device) Err![:0]const u8 {
+        const name_ptr: [*:0]const u8 = self.handle.name orelse return error.Invalid;
+        return std.mem.sliceTo(name_ptr, 0);
+    }
+
     pub fn nearestSampleRate(self: Device, rate: usize) usize {
         return @intCast(c.soundio_device_nearest_sample_rate(self.handle, @intCast(rate)));
     }
@@ -283,8 +289,8 @@ pub const Device = struct {
         return c.soundio_device_supports_format(self.handle, @intFromEnum(format));
     }
 
-    pub fn supportsLayout(self: Device, layout: *c.SoundIoChannelLayout) bool {
-        return c.soundio_device_supports_layout(self.handle, layout);
+    pub fn supportsLayout(self: Device, layout: Layout) bool {
+        return c.soundio_device_supports_layout(self.handle, layout.handle);
     }
 
     pub fn supportsSampleRate(self: Device, rate: usize) bool {
@@ -320,7 +326,7 @@ pub const OutStream = struct {
         try unwrap(c.soundio_outstream_start(self.handle));
     }
 
-    pub fn beginWrite(self: OutStream, areas: [*]?*c.SoundIoChannelArea, frame_count: usize) Err!usize {
+    pub fn beginWrite(self: OutStream, areas: *?[*]c.SoundIoChannelArea, frame_count: usize) Err!usize {
         var count: c_int = @intCast(frame_count);
         try unwrap(c.soundio_outstream_begin_write(self.handle, areas, &count));
         return @intCast(count);
@@ -365,7 +371,7 @@ pub const InStream = struct {
         try unwrap(c.soundio_instream_start(self.handle));
     }
 
-    pub fn beginRead(self: InStream, areas: ?[*]?*c.SoundIoChannelArea, frame_count: usize) Err!usize {
+    pub fn beginRead(self: InStream, areas: *?[*]c.SoundIoChannelArea, frame_count: usize) Err!usize {
         var count: c_int = @intCast(frame_count);
         try unwrap(c.soundio_instream_begin_read(self.handle, areas, &count));
         return @intCast(count);
@@ -383,6 +389,22 @@ pub const InStream = struct {
 
     pub fn pause(self: InStream, pause_state: bool) Err!void {
         try unwrap(c.soundio_instream_pause(self.handle, pause_state));
+    }
+};
+
+pub const Layout = struct {
+    handle: *const c.SoundIoChannelLayout,
+
+    pub fn getBuiltin(id: LayoutId) Err!Layout {
+        return .{
+            .handle = c.soundio_channel_layout_get_builtin(@intFromEnum(id)) orelse return error.Invalid,
+        };
+    }
+
+    pub fn getDefault(num_channels: usize) Err!Layout {
+        return .{
+            .handle = c.soundio_channel_layout_get_default(@intCast(num_channels)) orelse return error.Invalid,
+        };
     }
 };
 

@@ -9,6 +9,7 @@
         },
         .liblo = .{ .path = "lib/liblo" },
         .libsoundio = .{ .path = "lib/libsoundio" },
+        .libsndfile = .{ .path = "lib/libsndfile" },
     },
     .paths = .{
         "build.zig",

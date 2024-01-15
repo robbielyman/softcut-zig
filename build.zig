@@ -13,13 +13,18 @@ pub fn build(b: *std.Build) !void {
 
     const liblo = b.dependency("liblo", .{
         .target = target,
-        .optimize = optimize,
+        .optimize = .ReleaseFast,
         .static = static,
     });
     const libsoundio = b.dependency("libsoundio", .{
         .target = target,
         .optimize = optimize,
         .static = static,
+    });
+    const libsndfile = b.dependency("libsndfile", .{
+        .target = target,
+        .optimize = optimize,
+        // .static = static,
     });
 
     // softcut
@@ -86,6 +91,7 @@ pub fn build(b: *std.Build) !void {
     exe.root_module.addImport("softcut", module);
     exe.root_module.addImport("liblo", liblo.module("liblo"));
     exe.root_module.addImport("libsoundio", libsoundio.module("soundio"));
+    exe.root_module.addImport("libsndfile", libsndfile.module("sndfile"));
     exe.root_module.addOptions("options", opts);
 
     b.installArtifact(exe);
@@ -103,6 +109,7 @@ pub fn build(b: *std.Build) !void {
     tests.root_module.addImport("softcut", module);
     tests.root_module.addImport("liblo", liblo.module("liblo"));
     tests.root_module.addImport("libsoundio", libsoundio.module("soundio"));
+    tests.root_module.addImport("libsndfile", libsndfile.module("sndfile"));
     tests.root_module.addOptions("options", opts);
 
     const tests_step = b.step("test", "run the tests");

@@ -1,0 +1,16 @@
+.{
+    .name = "libsndfile",
+    .version = "1.2.2",
+    .paths = .{
+        "build.zig.zon",
+        "build.zig",
+        "main.zig",
+        "c.zig",
+    },
+    .dependencies = .{
+        .upstream = .{
+            .url = "https://github.com/libsndfile/libsndfile/archive/e5ee50fbda1b9049a45fc65d06c34825feb4f237.tar.gz",
+            .hash = "122091030fc00da10679f96e9f45d55cba84c63f4639b4c4c39518505c081f608711",
+        },
+    },
+}

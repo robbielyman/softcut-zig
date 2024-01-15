@@ -13,18 +13,18 @@ pub fn Softcut(comptime voices: usize) type {
         @cInclude("softcut_c.h");
     });
     return struct {
-        handle: c.Softcut,
+        handle: *c.softcut_t,
 
         pub const Err = error{VoiceOutOfBounds};
 
         const This = @This();
-        pub fn init() This {
+        pub fn init() !This {
             return .{
-                .handle = c.softcut_init(),
+                .handle = c.softcut_init() orelse return error.Failed,
             };
         }
 
-        pub fn destroy(self: This) void {
+        pub fn destroy(self: *This) void {
             c.softcut_destroy(self.handle);
         }
 

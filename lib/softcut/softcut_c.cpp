@@ -4,17 +4,17 @@
 typedef softcut::Softcut<SOFTCUT_C_NUMVOICES> SC;
 
 Softcut softcut_init() {
-  Softcut wrp = new softcut_t;
+  softcut_t *wrp = new softcut_t;
 
-  SC *sc = new SC();
-  wrp->ptr = (void *)sc;
+  SC *softcut = new SC();
+  wrp->ptr = (void *)softcut;
 
   return wrp;
 }
 
 void softcut_destroy(Softcut self) {
-  SC *sc = (SC *)self->ptr;
-  delete sc;
+  if (self->ptr)
+     delete (SC *)self->ptr;     
   delete self;
 }
 
@@ -99,12 +99,12 @@ void softcut_set_pre_filter_rq(Softcut self, int voice, float x) {
   sc->setPreFilterRq(voice, x);
 }
 
-void softcut_set_pre_filter_Lp(Softcut self, int voice, float x) {
+void softcut_set_pre_filter_lp(Softcut self, int voice, float x) {
   SC *sc = (SC *)self->ptr;
   sc->setPreFilterLp(voice, x);
 }
 
-void softcut_set_pre_filter_Hp(Softcut self, int voice, float x) {
+void softcut_set_pre_filter_hp(Softcut self, int voice, float x) {
   SC *sc = (SC *)self->ptr;
   sc->setPreFilterHp(voice, x);
 }
@@ -138,12 +138,12 @@ void softcut_set_post_filter_rq(Softcut self, int voice, float x) {
   sc->setPostFilterRq(voice, x);
 }
 
-void softcut_set_post_filter_Lp(Softcut self, int voice, float x) {
+void softcut_set_post_filter_lp(Softcut self, int voice, float x) {
   SC *sc = (SC *)self->ptr;
   sc->setPreFilterLp(voice, x);
 }
 
-void softcut_set_post_filter_Hp(Softcut self, int voice, float x) {
+void softcut_set_post_filter_hp(Softcut self, int voice, float x) {
   SC *sc = (SC *)self->ptr;
   sc->setPostFilterHp(voice, x);
 }

@@ -274,7 +274,7 @@ pub const ServerThread = struct {
 
     pub fn addMethod(self: ServerThread, path: ?[*:0]const u8, typespec: ?[*:0]const u8, method: *const CMethodFn, user_data: ?*const anyopaque) Method {
         return .{
-            .handle = c.lo_server_add_method(self.handle, path, typespec, method, user_data),
+            .handle = c.lo_server_thread_add_method(self.handle, path, typespec, method, user_data),
         };
     }
 
@@ -287,8 +287,8 @@ pub const Method = struct {
     handle: c.lo_method,
 };
 
-pub const CErrFn = fn (c_int, [*c]const u8, [*]const u8) callconv(.C) void;
-pub const CMethodFn = fn ([*c]const u8, [*c]const u8, [*c][*c]c.lo_arg, c.lo_message, ?*anyopaque) callconv(.C) c_int;
+pub const CErrFn = fn (c_int, [*c]const u8, [*c]const u8) callconv(.C) void;
+pub const CMethodFn = fn ([*c]const u8, [*c]const u8, [*c][*c]c.lo_arg, c_int, c.lo_message, ?*anyopaque) callconv(.C) c_int;
 
 pub const ErrFn = fn (errno: i32, msg: [*:0]const u8, where: [*:0]const u8) void;
 pub const MethodFn = fn (path: [*:0]const u8, msg: Message, ctx: ?*anyopaque) bool;
@@ -327,9 +327,11 @@ fn wrapMethodFn(comptime f: MethodFn) CMethodFn {
             path: [*c]const u8,
             types: [*c]const u8,
             argv: [*c][*c]c.lo_arg,
+            argc: c_int,
             msg: c.lo_message,
             user_data: ?*anyopaque,
         ) callconv(.C) c_int {
+            _ = argc; // autofix
             _ = types; // autofix
             _ = argv; // autofix
             const path_ptr: [*:0]const u8 = path.?;
