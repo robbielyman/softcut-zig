@@ -13,6 +13,10 @@ outstream: libsoundio.OutStream,
 out_thread: ?std.Thread = null,
 context: Context,
 
+const softcut_samplerate = 48000;
+const softcut_latency = 0.008;
+const softcut_format: c_uint = @intCast(@intFromEnum(libsoundio.Float32NE));
+
 const Context = struct {
     client: *Client,
     left: libsoundio.RingBuffer,
@@ -32,12 +36,15 @@ pub fn setup(allocator: std.mem.Allocator, client: *Client, in_index: ?usize, ou
     const in_dev = try ctx.getInputDevice(in_index.?);
     const out_dev = try ctx.getOutputDevice(out_index.?);
 
-    if (!in_dev.supportsSampleRate(48000) or !out_dev.supportsSampleRate(48000)) return error.BadSampleRate;
+    if (!in_dev.supportsSampleRate(softcut_samplerate) or !out_dev.supportsSampleRate(softcut_samplerate)) return error.BadSampleRate;
 
     const instream = try in_dev.createInStream();
-    instream.handle.sample_rate = @intCast(48000);
+    instream.handle.sample_rate = @intCast(softcut_samplerate);
     const outstream = try out_dev.createOutStream();
-    outstream.handle.sample_rate = @intCast(48000);
+    outstream.handle.sample_rate = @intCast(softcut_samplerate);
+    const float_cap: f32 = softcut_latency * softcut_samplerate * 64;
+    const cap: usize = @intFromFloat(float_cap);
+    const fill_count: usize = @intFromFloat(softcut_latency * softcut_samplerate * 32);
 
     this.* = .{
         .ctx = ctx,
@@ -47,10 +54,21 @@ pub fn setup(allocator: std.mem.Allocator, client: *Client, in_index: ?usize, ou
         .outstream = outstream,
         .context = .{
             .client = client,
-            .left = try libsoundio.RingBuffer.create(ctx, 4096 * 32 * 32 * 32),
-            .right = try libsoundio.RingBuffer.create(ctx, 4096 * 32 * 32 * 32),
+            .left = try libsoundio.RingBuffer.create(ctx, cap),
+            .right = try libsoundio.RingBuffer.create(ctx, cap),
         },
     };
+
+    this.instream.handle.software_latency = softcut_latency;
+    this.outstream.handle.software_latency = softcut_latency;
+
+    const left_write_ptr = this.context.left.writePtr();
+    @memset(left_write_ptr[0..fill_count], 0);
+    this.context.left.advanceWritePtr(fill_count);
+    const right_write_ptr = this.context.right.writePtr();
+    @memset(right_write_ptr[0..fill_count], 0);
+    this.context.right.advanceWritePtr(fill_count);
+
     return this;
 }
 
@@ -69,8 +87,8 @@ pub fn start(self: *This) !void {
     self.instream.handle.userdata = &self.context;
     self.outstream.handle.userdata = &self.context;
 
-    self.outstream.handle.format = @intCast(@intFromEnum(libsoundio.Float32NE));
-    self.instream.handle.format = @intCast(@intFromEnum(libsoundio.Float32NE));
+    self.outstream.handle.format = softcut_format;
+    self.instream.handle.format = softcut_format;
 
     const stereo = try libsoundio.Layout.getBuiltin(.IdStereo);
     self.instream.handle.layout = stereo.handle.*;
@@ -100,7 +118,7 @@ fn printSuitableOutputDevices(ctx: libsoundio.SoundIo) !void {
         defer dev.unref();
         if (!dev.supportsFormat(libsoundio.Float32NE)) continue;
         if (!dev.supportsLayout(stereo)) continue;
-        if (!dev.supportsSampleRate(48000)) continue;
+        if (!dev.supportsSampleRate(softcut_samplerate)) continue;
         found = true;
         try stdout.print("({d}): {s}\n", .{
             idx, try dev.name(),
@@ -151,18 +169,18 @@ fn read(instream: ?*libsoundio.c.SoundIoInStream, min_frames: c_int, max_frames:
     const in: libsoundio.InStream = .{ .handle = instream.? };
     const context: *Context = @ptrCast(@alignCast(in.handle.userdata.?));
 
-    var left_write_ptr = context.left.writePtr();
-    var right_write_ptr = context.right.writePtr();
+    var left_write_ptr: [*]f32 = @ptrCast(@alignCast(context.left.writePtr()));
+    var right_write_ptr: [*]f32 = @ptrCast(@alignCast(context.right.writePtr()));
 
-    const bytes_per_frame: usize = @intCast(in.handle.bytes_per_frame);
     const bytes_per_sample: usize = @intCast(in.handle.bytes_per_sample);
+    std.debug.assert(bytes_per_sample == @sizeOf(f32));
     const left_free_bytes = context.left.freeCount();
     const right_free_bytes = context.right.freeCount();
 
-    const left_free = @divExact(left_free_bytes, bytes_per_frame);
-    const right_free = @divExact(right_free_bytes, bytes_per_frame);
+    const left_free = @divExact(left_free_bytes, bytes_per_sample);
+    const right_free = @divExact(right_free_bytes, bytes_per_sample);
 
-    if (left_free < min or right_free < min) return;
+    if (left_free < min or right_free < min) @panic("ring buffer overflow!");
     const read_frames = @min(@min(left_free, right_free), max);
 
     var frames_to_read = read_frames;
@@ -172,19 +190,18 @@ fn read(instream: ?*libsoundio.c.SoundIoInStream, min_frames: c_int, max_frames:
         const frame_count = in.beginRead(&areas, frames_to_read) catch return;
         if (frame_count == 0) break;
         if (areas) |a| {
-            var left_src: [*]u8 = a[0].ptr.?;
-            const left_step: usize = @intCast(a[0].step);
-            const right_step: usize = @intCast(a[1].step);
-            var right_src: [*]u8 = a[1].ptr.?;
-            for (0..frame_count) |_| {
-                @memcpy(left_write_ptr[0..bytes_per_sample], left_src);
+            var left_src: [*]f32 = @ptrCast(@alignCast(a[0].ptr.?));
+            const left_step: usize = @intCast(@divExact(a[0].step, @sizeOf(f32)));
+            const right_step: usize = @intCast(@divExact(a[1].step, @sizeOf(f32)));
+            var right_src: [*]f32 = @ptrCast(@alignCast(a[1].ptr.?));
+            for (0..frame_count) |i| {
+                left_write_ptr[i] = left_src[0];
+                right_write_ptr[i] = right_src[0];
                 left_src += left_step;
-
-                @memcpy(right_write_ptr[0..bytes_per_sample], right_src);
                 right_src += right_step;
             }
         } else {
-            const len: usize = frame_count * bytes_per_frame;
+            const len: usize = frame_count * bytes_per_sample;
             @memset(left_write_ptr[0..len], 0);
             left_write_ptr += len;
             @memset(right_write_ptr[0..len], 0);
@@ -200,7 +217,7 @@ fn read(instream: ?*libsoundio.c.SoundIoInStream, min_frames: c_int, max_frames:
         if (frames_to_read == 0) break;
     }
 
-    const advance_bytes = read_frames * bytes_per_frame;
+    const advance_bytes = read_frames * bytes_per_sample;
     context.left.advanceWritePtr(advance_bytes);
     context.right.advanceWritePtr(advance_bytes);
 }
@@ -211,80 +228,39 @@ fn write(outstream: ?*libsoundio.c.SoundIoOutStream, min_frames: c_int, max_fram
     const out: libsoundio.OutStream = .{ .handle = outstream.? };
     const context: *Context = @ptrCast(@alignCast(out.handle.userdata.?));
 
-    var left_read_ptr = context.left.readPtr();
-    var right_read_ptr = context.right.readPtr();
+    var left_read_ptr: [*]const f32 = @ptrCast(@alignCast(context.left.readPtr()));
+    var right_read_ptr: [*]const f32 = @ptrCast(@alignCast(context.right.readPtr()));
 
-    const bytes_per_frame: usize = @intCast(out.handle.bytes_per_frame);
     const bytes_per_sample: usize = @intCast(out.handle.bytes_per_sample);
     const left_filled_bytes = context.left.fillCount();
     const right_filled_bytes = context.right.fillCount();
 
-    const left_filled = @divExact(left_filled_bytes, bytes_per_frame);
-    const right_filled = @divExact(right_filled_bytes, bytes_per_frame);
+    const left_filled = @divExact(left_filled_bytes, bytes_per_sample);
+    const right_filled = @divExact(right_filled_bytes, bytes_per_sample);
 
-    if (left_filled < min or right_filled < min) {
-        // we'll process silence
-        var silence: [2048]f32 = .{0} ** 2048;
-        var frames_to_write = max;
-        while (true) {
-            var areas: ?[*]libsoundio.c.SoundIoChannelArea = undefined;
-            const frame_count = out.beginWrite(&areas, @min(frames_to_write, 2048)) catch return;
-            if (frame_count == 0) break;
-            context.client.process(silence[0..frame_count], silence[0..frame_count]);
-            const a = areas.?;
-            var left_dst: [*]u8 = a[0].ptr.?;
-            const left_step: usize = @intCast(a[0].step);
-            var right_dst: [*]u8 = a[1].ptr.?;
-            const right_step: usize = @intCast(a[1].step);
-            for (0..frame_count) |i| {
-                const left_ptr: [*]u8 = @ptrCast(context.client.mix.buf[0][i..].ptr);
-                const right_ptr: [*]u8 = @ptrCast(context.client.mix.buf[1][i..].ptr);
-                @memcpy(left_dst[0..bytes_per_sample], left_ptr);
-                left_dst += left_step;
-                @memcpy(right_dst[0..bytes_per_sample], right_ptr);
-                right_dst += right_step;
-            }
-            out.endWrite() catch |err| {
-                std.debug.print("end write error: {s}\n", .{
-                    @errorName(err),
-                });
-                std.process.exit(1);
-            };
-            frames_to_write -|= frame_count;
-            if (frames_to_write == 0) break;
-        }
-        const advance_bytes = frames_to_write * bytes_per_frame;
-        context.left.advanceReadPtr(advance_bytes);
-        context.right.advanceReadPtr(advance_bytes);
-        return;
-    }
-
+    if (left_filled < min or right_filled < min) @panic("ring buffer underflow!");
     const write_frames: usize = @min(@min(left_filled, right_filled), max);
 
     var frames_to_write = write_frames;
     while (true) {
         var areas: ?[*]libsoundio.c.SoundIoChannelArea = undefined;
-        const frame_count = out.beginWrite(&areas, frames_to_write) catch return;
+        const frame_count = out.beginWrite(&areas, @min(frames_to_write, 2048)) catch return;
         if (frame_count == 0) break;
 
-        const float_left_read_ptr: [*]const f32 = @ptrCast(@alignCast(left_read_ptr));
-        const float_right_read_ptr: [*]const f32 = @ptrCast(@alignCast(right_read_ptr));
-        context.client.process(float_left_read_ptr[0..frame_count], float_right_read_ptr[0..frame_count]);
+        context.client.process(left_read_ptr[0..frame_count], right_read_ptr[0..frame_count]);
         left_read_ptr += frame_count;
         right_read_ptr += frame_count;
 
         const a = areas.?;
-        var left_dst: [*]u8 = a[0].ptr.?;
-        const left_step: usize = @intCast(a[0].step);
-        var right_dst: [*]u8 = a[1].ptr.?;
-        const right_step: usize = @intCast(a[1].step);
+        var left_dst: [*]f32 = @ptrCast(@alignCast(a[0].ptr.?));
+        const left_step: usize = @intCast(@divExact(a[0].step, @sizeOf(f32)));
+        var right_dst: [*]f32 = @ptrCast(@alignCast(a[1].ptr.?));
+        const right_step: usize = @intCast(@divExact(a[1].step, @sizeOf(f32)));
 
         for (0..frame_count) |i| {
-            const left_ptr: [*]u8 = @ptrCast(context.client.mix.buf[0][i..].ptr);
-            const right_ptr: [*]u8 = @ptrCast(context.client.mix.buf[1][i..].ptr);
-            @memcpy(left_dst[0..bytes_per_sample], left_ptr);
+            left_dst[0] = context.client.mix.buf[0][i];
+            right_dst[0] = context.client.mix.buf[1][i];
             left_dst += left_step;
-            @memcpy(right_dst[0..bytes_per_sample], right_ptr);
             right_dst += right_step;
         }
         out.endWrite() catch |err| {
@@ -297,7 +273,7 @@ fn write(outstream: ?*libsoundio.c.SoundIoOutStream, min_frames: c_int, max_fram
         if (frames_to_write == 0) break;
     }
 
-    const advance_bytes = write_frames * bytes_per_frame;
+    const advance_bytes = write_frames * bytes_per_sample;
     context.left.advanceReadPtr(advance_bytes);
     context.right.advanceReadPtr(advance_bytes);
 }
