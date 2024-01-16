@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) !void {
 
     const voices = b.option(usize, "voices", "number of softcut voices");
     opts.addOption(usize, "voices", voices orelse 6);
-    const static = b.option(bool, "static", "compile a static executable") orelse true;
+    const static = b.option(bool, "static", "compile a static executable") orelse false;
 
     // dependencies
 
