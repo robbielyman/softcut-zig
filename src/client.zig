@@ -32,6 +32,7 @@ in_level: [2][num_voices]LogRamp,
 out_level: [num_voices]LogRamp,
 out_pan: [num_voices]LogRamp,
 fb_level: [num_voices][num_voices]LogRamp,
+vu: [2]f32 = .{ 0, 0 },
 // flags
 enabled: [num_voices]bool,
 quant_phase: [num_voices]f64,
@@ -93,6 +94,13 @@ fn mixOutput(self: *This, num_frames: usize) void {
         if (!(self.cut.getPlayFlag(v) catch unreachable)) continue;
         self.mix.panMixFrom(&self.output[v], num_frames, &self.out_level[v], &self.out_pan[v]);
     }
+    if (num_frames == 0) return;
+    var vu: [2]f32 = .{ 0, 0 };
+    for (0..num_frames) |i| {
+        vu[0] += self.mix.buf[0][i] * self.mix.buf[0][i];
+        vu[1] += self.mix.buf[1][i] * self.mix.buf[1][i];
+    }
+    self.vu = .{ @sqrt(vu[0] / @as(f32, @floatFromInt(num_frames))), @sqrt(vu[1] / @as(f32, @floatFromInt(num_frames))) };
 }
 
 fn clearBusses(self: *This, num_frames: usize) void {

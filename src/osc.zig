@@ -12,7 +12,8 @@ const This = @This();
 client: *Client,
 quit: bool = false,
 thread: liblo.ServerThread,
-out_address: liblo.Address,
+phase_poll_address: liblo.Address,
+vu_poll_address: liblo.Address,
 num_methods: usize = 0,
 methods: [256]Method = undefined,
 vu_poll: *Poll,
@@ -31,7 +32,8 @@ pub fn init(allocator: std.mem.Allocator, softcut: *Client, port: [:0]const u8) 
     interface.* = .{
         .client = softcut,
         .thread = liblo.ServerThread.new(port.ptr, null),
-        .out_address = liblo.Address.new("127.0.0.1", "8888"),
+        .phase_poll_address = liblo.Address.new("127.0.0.1", "8888"),
+        .vu_poll_address = liblo.Address.new("127.0.0.1", "8888"),
         .vu_poll = try Poll.create(allocator, "/poll/softcut/vu"),
         .phase_poll = try Poll.create(allocator, "/poll/softcut/phase"),
         .allocator = allocator,
@@ -53,7 +55,8 @@ pub fn deinit(this: *This) void {
     this.allocator.destroy(this.phase_poll);
     this.allocator.destroy(this.vu_poll);
     this.thread.free();
-    this.out_address.free();
+    this.phase_poll_address.free();
+    this.vu_poll_address.free();
 }
 
 fn addServerMethod(this: *This, path: [:0]const u8, format: [:0]const u8, comptime handler: liblo.MethodFn) void {
@@ -190,9 +193,21 @@ const Methods = struct {
 
     fn pollVuStart(path: [*:0]const u8, msg: liblo.Message, ctx: ?*anyopaque) bool {
         _ = path; // autofix
-        _ = msg; // autofix
+        const num_args = msg.argCount();
         const method: *Method = @ptrCast(@alignCast(ctx orelse return true));
-        method.context.vu_poll.start();
+        defer method.context.vu_poll.start();
+        if (num_args == 0) return false;
+        var buf: [8]u8 = undefined;
+        const port: [:0]const u8 = msg.getArg([:0]const u8, 0) catch blk: {
+            var fba = std.heap.FixedBufferAllocator.init(&buf);
+            const int_port = msg.getArg(i32, 0) catch return true;
+            const str_port: [:0]const u8 = std.fmt.allocPrintZ(fba.allocator(), "{d}", .{int_port}) catch return true;
+            break :blk str_port;
+        };
+        const addr = liblo.Address.new("127.0.0.1", port.ptr);
+        _ = addr.port() catch return true;
+        method.context.vu_poll_address.free();
+        method.context.vu_poll_address = addr;
         return false;
     }
 
@@ -846,9 +861,21 @@ const Methods = struct {
 
     fn phasePollStart(path: [*:0]const u8, msg: liblo.Message, ctx: ?*anyopaque) bool {
         _ = path; // autofix
-        _ = msg; // autofix
+        const num_args = msg.argCount();
         const method: *Method = @ptrCast(@alignCast(ctx orelse return true));
-        method.context.phase_poll.start();
+        defer method.context.phase_poll.start();
+        if (num_args == 0) return false;
+        var buf: [8]u8 = undefined;
+        const port: [:0]const u8 = msg.getArg([:0]const u8, 0) catch blk: {
+            var fba = std.heap.FixedBufferAllocator.init(&buf);
+            const int_port = msg.getArg(i32, 0) catch return true;
+            const str_port: [:0]const u8 = std.fmt.allocPrintZ(fba.allocator(), "{d}", .{int_port}) catch return true;
+            break :blk str_port;
+        };
+        const addr = liblo.Address.new("127.0.0.1", port.ptr);
+        _ = addr.port() catch return true;
+        method.context.phase_poll_address.free();
+        method.context.phase_poll_address = addr;
         return false;
     }
 
@@ -878,12 +905,15 @@ fn phaseCallback(path: [:0]const u8, ctx: *anyopaque) void {
             const args = msg.argValues().?;
             args[0].?.i = @intCast(i);
             args[1].?.f = @floatCast(self.client.getQuantPhase(i));
-            liblo.sendMessage(self.out_address, path, msg) catch return;
+            liblo.sendMessage(self.phase_poll_address, path, msg) catch return;
         }
     }
 }
 
 fn vuCallback(path: [:0]const u8, ctx: *anyopaque) void {
-    _ = path; // autofix
-    _ = ctx; // autofix
+    var msg = liblo.Message.new();
+    const self: *This = @ptrCast(@alignCast(ctx));
+    defer msg.free();
+    msg.add(.{ self.client.vu[0], self.client.vu[1] }) catch return;
+    liblo.sendMessage(self.vu_poll_address, path, msg) catch return;
 }
