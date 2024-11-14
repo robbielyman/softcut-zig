@@ -15,8 +15,7 @@ on successful startup, `softcut-client` prints the list of OSC messages it respo
 
 ## building
 
-building requires a nightly build of [Zig](https://ziglang.org/);
-the minimum Zig version required is `0.12.0-dev.2154+e5dc9b1d0`.
+building requires the Zig compiler version 0.13.
 
 additional dependencies are `libsndfile`, `liblo`, and `libsoundio` (and their dependencies).
 by default you are required to have these available on your system.
