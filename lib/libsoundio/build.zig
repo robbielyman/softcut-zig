@@ -6,13 +6,13 @@ pub fn build(b: *std.Build) !void {
     const static = b.option(bool, "static", "build a static libsoundio") orelse true;
 
     const module = b.addModule("soundio", .{
-        .root_source_file = .{ .path = "main.zig" },
+        .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     const tests = b.addTest(.{
-        .root_source_file = .{ .path = "main.zig" },
+        .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -28,10 +28,10 @@ pub fn build(b: *std.Build) !void {
 
         // homebrew doesn't provide pkg-config for libsoundio???
         if (t == .macos or t == .linux) {
-            module.addSystemIncludePath(.{ .path = "/opt/homebrew/include" });
-            tests.addSystemIncludePath(.{ .path = "/opt/homebrew/include" });
-            module.addLibraryPath(.{ .path = "/opt/homebrew/lib" });
-            tests.addLibraryPath(.{ .path = "/opt/homebrew/lib" });
+            module.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
+            tests.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/include" });
+            module.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });
+            tests.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/lib" });
         }
 
         module.linkSystemLibrary("soundio", .{
@@ -90,30 +90,33 @@ fn compileLibSoundio(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
     defer files.deinit();
 
     try files.appendSlice(&.{
-        "src/soundio.c",
-        "src/util.c",
-        "src/os.c",
-        "src/dummy.c",
-        "src/channel_layout.c",
-        "src/ring_buffer.c",
+        "soundio.c",
+        "util.c",
+        "os.c",
+        "dummy.c",
+        "channel_layout.c",
+        "ring_buffer.c",
     });
 
     const t = target.result.os.tag;
 
     switch (t) {
-        .macos => try files.append("src/coreaudio.c"),
-        .windows => try files.append("src/wasapi.c"),
+        .macos => try files.append("coreaudio.c"),
+        .windows => try files.append("wasapi.c"),
         // FIXME: surely this is not the right way to do this
         .linux => try files.appendSlice(&.{
-            "src/pulseaudio.c",
-            "src/jack.c",
-            "src/alsa.c",
+            "pulseaudio.c",
+            "jack.c",
+            "alsa.c",
         }),
         else => return error.NotSupported,
     }
 
     lib.addCSourceFiles(.{
-        .dependency = upstream,
+        .root = .{ .dependency = .{
+            .dependency = upstream,
+            .sub_path = "src",
+        } },
         .files = files.items,
         .flags = &.{},
     });
@@ -131,19 +134,15 @@ fn compileLibSoundio(b: *std.Build, target: std.Build.ResolvedTarget, optimize: 
         else => return error.NotSupported,
     };
     lib.addConfigHeader(config);
-    lib.installConfigHeader(config, .{});
+    lib.installConfigHeader(config);
     lib.addIncludePath(.{ .dependency = .{
         .dependency = upstream,
         .sub_path = "",
     } });
-    lib.installHeadersDirectoryOptions(.{
-        .source_dir = .{ .dependency = .{
-            .dependency = upstream,
-            .sub_path = "soundio",
-        } },
-        .install_dir = .header,
-        .install_subdir = "soundio",
-    });
+    lib.installHeadersDirectory(.{ .dependency = .{
+        .dependency = upstream,
+        .sub_path = "soundio",
+    } }, "soundio", .{});
     switch (t) {
         .macos => {
             lib.linkFramework("CoreAudio");

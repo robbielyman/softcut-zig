@@ -8,11 +8,11 @@ pub fn build(b: *std.Build) !void {
     const module = b.addModule("liblo", .{
         .target = target,
         .optimize = optimize,
-        .root_source_file = .{ .path = "main.zig" },
+        .root_source_file = b.path("main.zig"),
     });
 
     const tests = b.addTest(.{
-        .root_source_file = .{ .path = "main.zig" },
+        .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
@@ -64,7 +64,7 @@ fn compileLibLo(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
         .include_path = "config.h",
     }, config_values);
     lib.addConfigHeader(config);
-    lib.installConfigHeader(config, .{});
+    lib.installConfigHeader(config);
 
     const lo = b.addConfigHeader(.{
         .style = .{
@@ -78,7 +78,7 @@ fn compileLibLo(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
         .include_path = "lo/lo.h",
     }, .{ .THREADS_INCLUDE = "#include \"lo/lo_serverthread.h\"" });
     lib.addConfigHeader(lo);
-    lib.installConfigHeader(lo, .{});
+    lib.installConfigHeader(lo);
 
     const lo_endian = b.addConfigHeader(.{
         .style = .{
@@ -92,7 +92,7 @@ fn compileLibLo(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
         .include_path = "lo/lo_endian.h",
     }, .{ .LO_BIGENDIAN = 2 });
     lib.addConfigHeader(lo_endian);
-    lib.installConfigHeader(lo_endian, .{});
+    lib.installConfigHeader(lo_endian);
 
     lib.addIncludePath(.{ .dependency = .{
         .dependency = upstream,
@@ -104,20 +104,17 @@ fn compileLibLo(b: *std.Build, target: std.Build.ResolvedTarget, optimize: std.b
     } });
     lib.defineCMacro("HAVE_CONFIG_H", "1");
     lib.addCSourceFiles(.{
-        .dependency = upstream,
+        .root = .{ .dependency = .{
+            .dependency = upstream,
+            .sub_path = "src",
+        } },
         .files = &library_sources,
-        .flags = &.{"-std=c11"},
+        .flags = &.{ "-std=c11", "-g", "-Qunused-arguments" },
     });
-    lib.installHeadersDirectoryOptions(.{
-        .source_dir = .{
-            .dependency = .{
-                .dependency = upstream,
-                .sub_path = "lo",
-            },
-        },
-        .install_dir = .header,
-        .install_subdir = "lo",
-    });
+    lib.installHeadersDirectory(.{ .dependency = .{
+        .dependency = upstream,
+        .sub_path = "lo",
+    } }, "lo", .{});
 
     return lib;
 }
@@ -137,15 +134,15 @@ const config_values = .{
 };
 
 const library_sources = .{
-    "src/address.c",
-    "src/blob.c",
-    "src/bundle.c",
-    "src/message.c",
-    "src/method.c",
-    "src/pattern_match.c",
-    "src/send.c",
-    "src/server.c",
-    "src/timetag.c",
-    "src/version.c",
-    "src/server_thread.c",
+    "address.c",
+    "blob.c",
+    "bundle.c",
+    "message.c",
+    "method.c",
+    "pattern_match.c",
+    "send.c",
+    "server.c",
+    "timetag.c",
+    "version.c",
+    "server_thread.c",
 };

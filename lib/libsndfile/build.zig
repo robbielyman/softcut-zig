@@ -6,14 +6,14 @@ pub fn build(b: *std.Build) !void {
     // TODO enable building statically?
 
     const module = b.addModule("sndfile", .{
-        .root_source_file = .{ .path = "main.zig" },
+        .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
     });
 
     const tests = b.addTest(.{
-        .root_source_file = .{ .path = "main.zig" },
+        .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
         .link_libc = true,
